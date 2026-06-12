@@ -1,0 +1,1 @@
+<!-- REMOVED: This spec has been removed. The strategy pattern (MessageQueue ABC, RedisQueue, NifiQueue) was abandoned in favor of the simpler "NiFi sandwich" approach where workers remain unchanged and NiFi sits transparently between Redis _input and _output queues. -->
