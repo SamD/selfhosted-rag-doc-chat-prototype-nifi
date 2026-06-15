@@ -17,8 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **`SUPERVISOR_N_CTX` env var**: Separate context window setting for the gatekeeper supervisor LLM prompt truncation. Previously shared `LLAMA_N_CTX` with the main RAG LLM. Default: 8192.
 - **Operational playbooks**: `infra/operations/day-1.md` (setup checklist) and `infra/operations/day-2.md` (symptom→diagnosis→fix runbook).
 - **OpenSpec baseline**: 7 capability specs documenting current architecture (`openspec/specs/`). Project context and per-artifact rules in `openspec/config.yaml`.
+- **OpenSpec proposal: NiFi Redis middleware (Phase 1)**: Complete proposal for introducing Apache NiFi as middleware between workers and Redis. Includes strategy pattern (`MessageQueue` ABC with `RedisQueue`/`NifiQueue` implementations), queue name suffix transformation (`_input`/`_output`), NiFi Python bridge processors (`RedisSourceProcessor`, `RedisSinkProcessor`), programmatic flow setup via REST API, and docker-compose integration. 70+ implementation tasks across 9 groups.
+- **NiFi middleware implementation**: Apache NiFi integration as required transparent middleware between Redis queues. NiFi Python processors (`RedisQueueConsumer`, `RedisQueueProducer`) using native `redis` library with connection pooling. NiPyAPI client wrapper (`nifi_client.py`) for programmatic flow management with SSL verification toggle and basic auth. Bootstrap service (`nifi_bootstrap.py`) automatically deploys and starts the flow on startup (one-shot service). Worker queue names updated to use `_input`/`_output` suffixes. `NIFI_ENDPOINT` is now a required environment variable. 26 unit tests (11 processor tests, 15 client tests). Documentation: `nifi/README.md`, quickstart guide, day-1/day-2 operations runbooks.
 
 ### Changed
+- **Redis configuration**: `REDIS_HOST` and `REDIS_PORT` are now required environment variables (no defaults). Redis must be hosted on a separate host accessible via DNS or IP from all workers and NiFi. Removed Redis service from `doc-ingest-chat/ingest-dockercompose.yaml` and `redis_data` volume. Added `_require_env()` helper function in `shared/config.py` for required environment variable validation.
+- **Consumer batch configuration**: Renamed `CHUNK_TIMEOUT` to `STAGED_CHUNK_TTL` for clarity (it's a TTL, not a timeout). Added `CONSUMER_BATCH_SIZE` env var to control chunk buffering (default: 50, previously hardcoded). Consumer worker now uses `settings.CONSUMER_BATCH_SIZE` instead of hardcoded value.
 - **CPU profile removed**: Removed `--cpu` flag from `run-compose.sh`, `CPUEnvConfig` from `env_strategy.py`, `LLAMA_USE_GPU` env var, `USE_OLLAMA` env var, and `run-compose-cpu.sh`. Device hardcoded to `"cuda"` — non-GPU deployments use remote HTTP endpoints.
 - **Ollama code path removed**: `USE_OLLAMA` branch removed from `chroma_chat.py` and `utils/llm_setup.py`. Users who want Ollama set `LLM_PATH` to the Ollama server URL (OpenAI-compatible).
 - **Gatekeeper context limit**: Now uses `SUPERVISOR_N_CTX` instead of `LLAMA_N_CTX * 0.8`. Decouples supervisor prompt truncation from main LLM context.
@@ -153,8 +157,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - **WhisperX Integration**: Added a dedicated `whisperx_worker` for high-performance audio and video transcription with alignment and timestamp support.
 - **Enhanced Observability & Traceability**
   - **Distributed Trace IDs**: Implemented `trace_utils` to propagate unique `trace_id`s across all distributed workers, allowing end-to-end visibility of a document's processing journey.
-- **Stream-Centric Processing**
-  - **Chunk-Level Streaming**: Refactored the ingestion pipeline to process data as a continuous stream of chunks, optimizing memory usage and enabling massive document support.
+- **NiFi Native Orchestration**: Migrated the core RAG pipeline to Apache NiFi 2.x, replacing custom orchestration and Redis with native disk-backed persistence and backpressure.
+- **NiFi Python Processor**: Implemented `MarkdownSplitter.py` leveraging the NiFi 2.x `FlowFileTransform` API, porting the 'Zero-Loss Sub-Splitting' logic into an isolated virtual environment.
+- **Distributed LXC Support**: Standardized on `InvokeHTTP` for binary-stream communication with remote WhisperX and Docling worker nodes.
+- **Native Vector Store Integration**: Leveraged NiFi 2.0's `PutQdrant` processor for simplified, high-performance chunk persistence.
 - **Interactive RAG UI Enhancements**
   - **Clickable Document Citations**: Implemented a static file route (`/files`) in the FastAPI backend to serve ingested PDFs directly. 
   - **Markdown Link Mapping**: Refactored `chat_utils.py` and the AstroJS frontend to transform plain-text citations into interactive Markdown links pointing to the exact page of the original source.
